@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>حكايتي الذكية | My Smart Story</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#342d6b;--bg2:#2a2458;--ink:#fff;--soft:#d9d4f5;--yellow:#ffd25e;--pink:#f06aa8;--blue:#5fb8ff}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font-family:Tajawal,system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.8;min-height:100vh}
+main{max-width:640px;margin:0 auto;padding:32px 20px 64px}
+h1{font-size:2.4rem;font-weight:800;text-align:center;margin:0 0 4px}
+.sub{text-align:center;color:var(--soft);margin:0 0 28px}
+.panel{background:var(--bg2);border-radius:24px;padding:20px;margin-bottom:16px;border:3px solid transparent}
+.panel.yellow{border-color:var(--yellow)}.panel.pink{border-color:var(--pink)}.panel.blue{border-color:var(--blue)}
+.panel h2{margin:0 0 10px;font-size:1.25rem}
+label{display:block;font-weight:700;margin:10px 0 4px}
+input,select{width:100%;padding:12px 14px;border-radius:14px;border:0;font:inherit;background:#fff;color:#222}
+.drop{display:block;text-align:center;padding:28px 12px;border:3px dashed var(--yellow);border-radius:18px;cursor:pointer;color:var(--yellow);font-weight:700}
+.drop input{display:none}
+#preview{display:none;max-width:100%;max-height:260px;margin:12px auto 0;border-radius:16px}
+button{font:inherit;font-weight:800;border:0;border-radius:999px;padding:14px 26px;cursor:pointer;color:#2a2458;background:var(--yellow);width:100%;font-size:1.1rem}
+button.alt{background:var(--blue);margin-top:12px}
+button:disabled{opacity:.5;cursor:default}
+:focus-visible{outline:3px solid #fff;outline-offset:3px}
+#story{display:none;background:#fff;color:#2a2458;border-radius:24px;padding:22px;font-size:1.15rem;white-space:pre-wrap}
+#story h3{margin:0 0 8px;font-size:1.5rem}
+#msg{text-align:center;color:var(--yellow);min-height:1.8em;margin:10px 0}
+.note{font-size:.85rem;color:var(--soft);text-align:center;margin-top:24px}
+</style>
+</head>
+<body>
+<main>
+  <h1>حكايتي الذكية</h1>
+  <p class="sub">ارسم أي شيء يخطر ببالك، ودَع الذكاء الاصطناعي يحوّل رسمتك إلى حكاية ممتعة.</p>
+
+  <section class="panel yellow">
+    <h2>🎨 ارفع رسمتك</h2>
+    <label class="drop" for="file">اضغط لاختيار صورة الرسمة
+      <input id="file" type="file" accept="image/*">
+    </label>
+    <img id="preview" alt="الرسمة المختارة">
+  </section>
+
+  <section class="panel pink">
+    <h2>🧸 خصّص قصتك</h2>
+    <label for="name">اسم الطفل (اختياري)</label>
+    <input id="name" maxlength="20">
+    <label for="age">العمر</label>
+    <select id="age"><option>3-5</option><option selected>6-8</option><option>9-12</option></select>
+    <label for="theme">نوع القصة</label>
+    <select id="theme"><option>مغامرة</option><option>صداقة</option><option>خيال وسحر</option><option>قصة قبل النوم</option></select>
+  </section>
+
+  <button id="go" disabled>اكتب لي حكاية ✨</button>
+  <div id="msg" role="status"></div>
+
+  <section id="story" class="panel" aria-live="polite"></section>
+  <button id="listen" class="alt" style="display:none">📚 استمع للحكاية</button>
+
+  <p class="note">الرسمة تُرسل إلى Anthropic لإنشاء القصة ولا تُحفظ في الموقع.</p>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let imageData = null;
+
+// shrink image to keep requests small and cheap
+function shrink(file){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, 1024 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = img.width * s; c.height = img.height * s;
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      res(c.toDataURL('image/jpeg', 0.8));
+    };
+    img.onerror = rej;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+$('file').addEventListener('change', async e => {
+  const f = e.target.files[0];
+  if(!f) return;
+  try{
+    const url = await shrink(f);
+    imageData = url.split(',')[1];
+    $('preview').src = url; $('preview').style.display = 'block';
+    $('go').disabled = false; $('msg').textContent = '';
+  }catch{ $('msg').textContent = 'تعذّر قراءة الصورة. جرّب صورة ثانية.'; }
+});
+
+$('go').addEventListener('click', async () => {
+  $('go').disabled = true; $('msg').textContent = 'جاري كتابة الحكاية…';
+  $('story').style.display = 'none'; $('listen').style.display = 'none';
+  speechSynthesis.cancel();
+  try{
+    const r = await fetch('/api/story', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({image:imageData, name:$('name').value, age:$('age').value, theme:$('theme').value})
+    });
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.error || 'خطأ');
+    const [title, ...rest] = d.story.trim().split('\n');
+    $('story').innerHTML = '';
+    const h = document.createElement('h3'); h.textContent = title.replace(/^#+\s*/, '');
+    const p = document.createElement('div'); p.textContent = rest.join('\n').trim();
+    $('story').append(h, p);
+    $('story').style.display = 'block'; $('listen').style.display = 'block';
+    $('msg').textContent = '';
+  }catch(err){ $('msg').textContent = err.message || 'صار خطأ، جرّب مرة ثانية.'; }
+  $('go').disabled = false;
+});
+
+$('listen').addEventListener('click', () => {
+  if(speechSynthesis.speaking){ speechSynthesis.cancel(); return; }
+  const u = new SpeechSynthesisUtterance($('story').innerText);
+  u.lang = 'ar-SA'; u.rate = 0.9;
+  speechSynthesis.speak(u);
+});
+</script>
+</body>
+</html>

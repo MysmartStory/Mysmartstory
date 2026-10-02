@@ -90,7 +90,7 @@ function buildPrompt(name, age, theme){
     name ? ('اسم بطل القصة: ' + name + '.') : 'اختر اسمًا لطيفًا لبطل القصة.',
     'عمر الطفل القارئ: ' + age + ' سنوات، فاجعل اللغة والأفكار مناسبة لهذا العمر.',
     'نوع القصة: ' + theme + '.',
-    'طول القصة: ' + (lengths[age] || 'حوالي 250 كلمة') + '.',
+    'طول القصة: ' + (lengths[age] ? lengths[age] : 'حوالي 250 كلمة') + '.',
     'القصة آمنة تمامًا للأطفال، لطيفة، بلا عنف أو خوف، ولها نهاية سعيدة ورسالة إيجابية بسيطة.',
     'اكتب عنوان القصة وحده في السطر الأول بدون أي رموز، ثم القصة في الأسطر التالية. لا تستخدم Markdown ولا تضف أي شيء آخر.'
   ].join('\n');
@@ -119,7 +119,7 @@ $('go').addEventListener('click', async () => {
     });
     let d = null;
     try { d = await r.json(); } catch { d = null; }
-    if(!r.ok  !d  !d.reply) throw new Error('صار خطأ في كتابة الحكاية، جرّب مرة ثانية.' + (d && d.error ? ' (' + d.error + ')' : ''));
+    if(!(r.ok && d && d.reply)) throw new Error('صار خطأ في كتابة الحكاية، جرّب مرة ثانية.' + (d && d.error ? ' (' + d.error + ')' : ''));
     const [title, ...rest] = d.reply.trim().split('\n');
     $('story').innerHTML = '';
     const h = document.createElement('h3'); h.textContent = title.replace(/^#+\s*/, '').replace(/\*/g, '');
@@ -127,7 +127,7 @@ $('go').addEventListener('click', async () => {
     $('story').append(h, p);
     $('story').style.display = 'block'; $('listen').style.display = 'block';
     $('msg').textContent = '';
-  }catch(err){ $('msg').textContent = err.message || 'صار خطأ، جرّب مرة ثانية.'; }
+  }catch(err){ $('msg').textContent = err.message ? err.message : 'صار خطأ، جرّب مرة ثانية.'; }
   $('go').disabled = false;
 });
 
